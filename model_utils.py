@@ -12,20 +12,21 @@ import torch
 print(torch.__version__)
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
 from transformers import BertForSequenceClassification
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import numpy as np
 
-from torch.utils.data import TensorDataset,Subset
+from torch.utils.data import TensorDataset,Subset, ConcatDataset
 # Metrics
 from sklearn.metrics import classification_report
 from sklearn.metrics import matthews_corrcoef
-from sklearn.metrics import roc_auc_score
-from sklearn.metrics import f1_score
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, f1_score, precision_score, roc_auc_score, recall_score
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import cross_validate
 import seaborn as sns
 
-def get_bert_model():  
+import sys
+
+def get_bert_model(device):  
     model = BertForSequenceClassification.from_pretrained(
       "bert-base-uncased", 
       num_labels = 2,           
@@ -33,7 +34,18 @@ def get_bert_model():
       output_hidden_states = True, 
     )
     # Tell pytorch to run this model on the GPU.
-    model.cuda()
+    model.to(device)
+    return model
+
+def get_model_auto(model_name, device):
+    model = AutoModelForSequenceClassification.from_pretrained(
+        model_name,
+        num_labels = 2,           
+        output_attentions = False, 
+        output_hidden_states = True, 
+    )
+    # Tell pytorch to run this model on the GPU.
+    model.to(device)
     return model
 
 def flat_accuracy(preds, labels):
@@ -43,7 +55,7 @@ def flat_accuracy(preds, labels):
         roc = roc_auc_score(pred_flat, labels_flat)
     except ValueError:
         roc = 0
-    return f1_score(pred_flat, labels_flat, average='weighted'), roc, np.sum(pred_flat == labels_flat) / len(labels_flat)
+    return f1_score(pred_flat, labels_flat, average='macro'), precision_score(pred_flat, labels_flat, average='macro'), recall_score(pred_flat, labels_flat, average='macro'), roc, np.sum(pred_flat == labels_flat) / len(labels_flat)
 
 def _flat_accuracy(preds, labels):
     pred_flat = np.argmax(preds, axis=1).flatten()
@@ -104,21 +116,24 @@ def cross_validation(model, _X, _y, _cv=5):
               }
     
 def get_data_loaders(batch_size, dataset, train_indexes, val_indexes):
-    train_tensor = Subset(dataset,train_indexes)
-    val_tensor = Subset(dataset,val_indexes)
-    train_dataloader = DataLoader(
-            train_tensor, 
-            sampler = RandomSampler(train_tensor), 
-            batch_size = batch_size
-        )
-
-    val_dataloader = DataLoader(
-            val_tensor, 
-            sampler = SequentialSampler(val_tensor), 
-            batch_size = batch_size 
-        )
-    return train_dataloader,val_dataloader
+    return get_data_loader(batch_size, dataset, train_indexes),get_data_loader(batch_size, dataset, val_indexes)
   
+def get_data_loader(batch_size, dataset, indexes='undefined'):
+    if indexes != 'undefined':
+        dataset = Subset(dataset, indexes)
+    dataloader = DataLoader(
+        dataset, 
+        sampler = RandomSampler(dataset), 
+        batch_size = batch_size
+    )
+    return dataloader
+
+def get_augmented_training_set(dataset, aug_dataset, indexes):
+    original = Subset(dataset, indexes)
+    aug = Subset(aug_dataset, indexes)
+    concat = torch.utils.data.ConcatDataset([original, aug])
+    return concat
+
 def draw_test_train_curve(test_losses, train_losses):
     # Use plot styling from seaborn.
     sns.set(style='darkgrid')

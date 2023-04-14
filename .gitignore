@@ -2,5 +2,9 @@
 .DS_Store
 **/.DS_Store
 
-data/all_comments.pickle
-data/all_posts.pickle
+data/**
+final_models/**
+
+__pycache__/**
+checkpoints/**
+**.log
