@@ -69,7 +69,7 @@ def construct_prompt(header, query):
     return prompt
     
 
-openai.api_key = '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'
+openai.api_key = ''
 # Define the model to be used
 COMPLETIONS_MODEL = "text-davinci-003"
 # Define parameters
